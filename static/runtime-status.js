@@ -10,7 +10,7 @@
   return '试运行 · 当前空闲，首次处理需要准备模型';
  }
  function apply(s,doc){
-  if(s.profile!=='server-2gb')return;
+  if(s.profile!=='server-2gb'){const p=doc.querySelector('header .pill');if(p)p.textContent='本地处理 · 隐私优先';return;}
   doc.body.dataset.runtimeProfile=s.profile;
   doc.getElementById('runtimeNotice').hidden=false;
   doc.getElementById('runtimeMessage').textContent=message(s);
@@ -18,7 +18,7 @@
   const storage=doc.getElementById('storageHint');if(storage)storage.textContent='保存文件夹位于你的设备。当前试运行仍保留处理工作文件，请仅使用测试素材。';
   const welcome=doc.querySelector('#storageWelcome p');if(welcome)welcome.textContent='保存文件夹位于你的设备。部署验证期间，内容会交给测试服务处理，请使用测试素材。';
   const frame=doc.getElementById('recordingFrame');
-  try{const d=frame?.contentDocument;if(d){const note=d.getElementById('storageNote');if(note)note.textContent='部署验证期间，内容由测试服务处理并保留工作文件。请使用测试素材并自行导出；尚未开放多人隔离和自动清理。';const hint=d.querySelector('.model-hint');if(hint)hint.textContent='完整模型按需准备，忙时将排队，请结合原文核对。'}}catch{}
+  try{const d=frame?.contentDocument;if(d){d.body.dataset.runtimeProfile=s.profile;const note=d.getElementById('storageNote');if(note)note.textContent='部署验证期间，内容由测试服务处理并保留工作文件。请使用测试素材并自行导出；尚未开放多人隔离和自动清理。';const hint=d.querySelector('.model-hint');if(hint)hint.textContent='完整模型按需准备，忙时将排队，请结合原文核对。'}}catch{}
  }
  root.RuntimeStatus={message,apply};
  if(typeof module!=='undefined')module.exports=root.RuntimeStatus;

@@ -271,7 +271,7 @@ class ImportRequest(BaseModel):
 
 def new(title,source):
     jid=uuid.uuid4().hex; (DATA/jid).mkdir()
-    rec={'id':jid,'title':title,'source':source,'status':'queued','message':'等待处理…','text':'','segments':[],'created_at':datetime.now(timezone.utc).isoformat()}
+    rec={'id':jid,'title':title,'source':source,'runtime_profile':'server-2gb' if LOW_MEMORY else 'local','status':'queued','message':'等待处理…','text':'','segments':[],'created_at':datetime.now(timezone.utc).isoformat()}
     save(rec); return rec
 
 @app.get('/')
@@ -286,7 +286,7 @@ def jobs():
 
 @app.get('/api/jobs/{jid}')
 def job(jid:str):
-    r=read(jid); r['local_path']=str(folder(jid).resolve()); r['cover_url']=f'/api/jobs/{jid}/cover' if (folder(jid)/'cover.jpg').exists() else ''; media=find_media(r); r['media_url']=f'/api/jobs/{jid}/media' if media else '';
+    r=read(jid); r['runtime_profile']='server-2gb' if LOW_MEMORY else 'local'; r['local_path']=str(folder(jid).resolve()); r['cover_url']=f'/api/jobs/{jid}/cover' if (folder(jid)/'cover.jpg').exists() else ''; media=find_media(r); r['media_url']=f'/api/jobs/{jid}/media' if media else '';
     if media: r['media_file']=str(media.relative_to(folder(jid).resolve()))
     r['enhanced_url']=f'/api/meetings/{jid}/enhanced' if r.get('source')=='meeting' and (folder(jid)/'enhanced.wav').is_file() else ''
     return r
