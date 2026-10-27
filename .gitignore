@@ -1,0 +1,16 @@
+.venv/
+data/
+vendor/
+__pycache__/
+
+.runtime/
+
+Volume/
+
+# Desktop build artifacts and dependencies
+build/
+dist/
+desktop/node_modules/
+*.dmg
+*.spec
+.DS_Store

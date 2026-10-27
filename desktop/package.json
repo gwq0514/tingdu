@@ -1,0 +1,77 @@
+{
+  "name": "tingdu-desktop",
+  "version": "1.1.0",
+  "description": "听读：本地录音转写与内容阅读助手",
+  "main": "main.cjs",
+  "author": "gwq0514",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --mac dir --arm64",
+    "dist": "electron-builder --mac dmg --arm64"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.0.12",
+    "ffmpeg-static": "5.3.0"
+  },
+  "build": {
+    "appId": "online.tingdu.desktop",
+    "productName": "听读",
+    "copyright": "Copyright © 2026 听读 contributors",
+    "directories": {
+      "output": "../dist/mac"
+    },
+    "files": [
+      "main.cjs",
+      "policy.cjs",
+      "loading.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../build/desktop-resources",
+        "to": "engine"
+      },
+      {
+        "from": "../third_party",
+        "to": "third_party"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "听读需要使用麦克风，将你的录音在本机转写为文字。",
+        "LSMinimumSystemVersion": "14.0"
+      },
+      "icon": "icon.png"
+    },
+    "dmg": {
+      "title": "听读",
+      "contents": [
+        {
+          "x": 130,
+          "y": 180
+        },
+        {
+          "x": 410,
+          "y": 180,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "artifactName": "Tingdu-${version}-mac-${arch}.${ext}",
+    "electronDist": "node_modules/electron/dist",
+    "afterPack": "after-pack.cjs"
+  }
+}

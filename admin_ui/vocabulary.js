@@ -1,0 +1,13 @@
+'use strict';
+const $=id=>document.getElementById(id);let credential='',revision=0,dirty=false;
+function notice(s){$('notice').textContent=s}
+async function api(path,options={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json','Authorization':'Bearer '+credential,...options.headers},cache:'no-store'});const result=await response.json();if(!response.ok){if(response.status===401){credential='';$('editor').hidden=true;$('login').hidden=false;$('logout').hidden=true}throw Error(result.detail||'请求未完成')}return result}
+function render(data){revision=data.revision;$('enabled').checked=data.enabled;$('entries').value=data.entries.map(e=>[e.term,...e.aliases].join(' | ')).join('\n');$('revision').textContent='版本 '+revision;dirty=false;$('saveState').textContent='已载入';$('result').textContent=''}
+async function load(){render(await api('/api/vocabulary'))}
+$('loginForm').onsubmit=async e=>{e.preventDefault();credential=$('password').value.trim();try{await load();$('password').value='';$('login').hidden=true;$('editor').hidden=false;$('logout').hidden=false;notice('')}catch(e){notice(e.message)}};
+$('logout').onclick=()=>{if(dirty&&!confirm('有未保存的修改，仍然退出？'))return;credential='';$('entries').value='';$('sample').value='';$('result').textContent='';dirty=false;$('editor').hidden=true;$('login').hidden=false;$('logout').hidden=true;notice('已退出')};
+function changed(){dirty=true;$('saveState').textContent='有未保存的修改'}$('entries').oninput=changed;$('enabled').onchange=changed;
+$('save').onclick=async()=>{const button=$('save');button.disabled=true;try{const entries=$('entries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map((line,i)=>{const parts=line.split('|').map(x=>x.trim());if(parts.length<2||parts.some(x=>!x))throw Error('第 '+(i+1)+' 行需填写正确词语和误识别写法，用 | 分开');return {term:parts[0],aliases:parts.slice(1)}});const data=await api('/api/vocabulary',{method:'PUT',body:JSON.stringify({enabled:$('enabled').checked,entries,revision})});render(data);$('saveState').textContent='已保存，下一段识别生效';notice('保存成功。历史记录不会自动改写。')}catch(e){notice(e.message)}finally{button.disabled=false}};
+$('reload').onclick=async()=>{if(dirty&&!confirm('重新载入会放弃未保存的修改，继续？'))return;try{await load();notice('已重新载入')}catch(e){notice(e.message)}};
+$('preview').onclick=async()=>{if(dirty){notice('请先保存配置，再测试已保存的规则。');return}try{const r=await api('/api/preview',{method:'POST',body:JSON.stringify({text:$('sample').value})});$('result').textContent=r.text+'\n\n'+(r.changes.length?'命中 '+r.changes.length+' 处：'+r.changes.map(c=>c.from+' → '+c.to).join('；'):'未命中纠正规则');notice('')}catch(e){notice(e.message)}};
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});

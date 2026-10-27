@@ -1,0 +1,26 @@
+{
+  "qwen": {
+    "name": "Qwen3-0.6B GGUF Q8_0",
+    "source": "https://huggingface.co/Qwen/Qwen3-0.6B",
+    "license": "Apache-2.0",
+    "sha256": "361cc68159042c36ebff7715dc5a2e4612153e88f3e9c9c234820849d6dc9e1d",
+    "notice": "Existing Q8_0 GGUF identified by embedded model metadata and pinned SHA256. This is not claimed to be byte-identical to the current official GGUF download. For rebuild, use the pinned artifact or document and revalidate a replacement."
+  },
+  "ollama": {
+    "version": "0.40.3",
+    "source": "https://github.com/ollama/ollama",
+    "license": "MIT",
+    "notice": "Uses the self-contained llama.cpp runner. Optional broken Homebrew MLX link is excluded; Qwen GGUF does not use MLX."
+  },
+  "ffmpeg": {
+    "source": "https://github.com/eugeneware/ffmpeg-static",
+    "license": "GPL-3.0-or-later",
+    "notice": "The ffmpeg-static package documents platform binary and matching source download links. See ffmpeg-static-LICENSE and README bundled in this directory."
+  },
+  "xhs-downloader": {
+    "commit": "3261312721f0b37c705ba6515885bc7f34349f2f",
+    "source": "https://github.com/JoeanAmier/XHS-Downloader",
+    "license": "GPL-3.0-or-later",
+    "changes": "Desktop build stages a patched writable Volume path and bundled locale path; see desktop/build.py."
+  }
+}
