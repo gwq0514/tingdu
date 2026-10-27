@@ -101,13 +101,13 @@ def register(app, engine):
             if rec.get('noise_suppression'):
                 try:
                     prefix=audio_processing.read_wav(root/'chunks'/f'{sequence-1:05d}.wav')[-8000:] if sequence else None
-                    clean=audio_processing.models_for(str(engine.DATA)).enhance(samples,prefix)
+                    clean=engine.audio_models(live=True).enhance(samples,prefix)
                     audio_processing.write_wav(chunk_path.with_suffix('.enhanced.wav'),clean)
                     samples=clean
                     enhancement='done'
                 except Exception:enhancement='error'
-            with engine.recording_model_lock:
-                segments, _ = engine.shared_asr().transcribe(samples)
+            with engine.asr_lock():
+                segments, _ = engine.shared_asr(live=True).transcribe(samples)
                 offset = rec['recording_chunks'][sequence]['start']
                 result=[]
                 for segment in segments:
@@ -125,7 +125,7 @@ def register(app, engine):
                 engine.save(rec)
             if rec.get('diarization_requested') and rec.get('diarization_status')!='unavailable' and result:
                 try:
-                    labeled,count=live_speakers.service(str(engine.DATA)).process(jid,original_samples,result,offset)
+                    labeled,count=engine.speaker_service().process(jid,original_samples,result,offset)
                     live_status='done'
                 except Exception:
                     labeled=[dict(row,speaker='未确定',speaker_uncertain=True,speaker_provisional=True) for row in result]
@@ -184,7 +184,7 @@ def register(app, engine):
                 if rec.get('llm_model') and rec['text'] and not rec.get('failed_chunks'):
                     rec['summary_status'] = 'running'
                 engine.save(rec)
-            live_speakers.service(str(engine.DATA)).clear(jid)
+            engine.speaker_service().clear(jid)
             if rec.get('summary_status') == 'running' or rec.get('diarization_status')=='queued':
                 engine.pool.submit(summarize_job,jid,rec.get('llm_model',''))
         except Exception:
@@ -199,7 +199,7 @@ def register(app, engine):
             with recording_lock(jid):
                 rec=meeting(jid);rec['diarization_status']='running';engine.save(rec)
             try:
-                turns=audio_processing.models_for(str(engine.DATA)).diarize(audio_processing.read_wav(engine.folder(jid)/'source.wav'),engine.recording_priority.wait_for_background)
+                turns=engine.diarize_file(engine.folder(jid)/'source.wav',engine.recording_priority.wait_for_background)
                 with recording_lock(jid):
                     rec=meeting(jid)
                     if turns:
@@ -226,7 +226,7 @@ def register(app, engine):
             source=engine.folder(jid)/'source.wav';asr_source=source
             if rec.get('noise_suppression'):
                 try:
-                    audio_processing.models_for(str(engine.DATA)).enhance_file(source,engine.folder(jid)/'enhanced.wav',engine.recording_priority.wait_for_background)
+                    engine.audio_models().enhance_file(source,engine.folder(jid)/'enhanced.wav',engine.recording_priority.wait_for_background)
                     asr_source=engine.folder(jid)/'enhanced.wav';noise_status='done'
                 except Exception:noise_status='fallback'
                 with recording_lock(jid):
@@ -270,6 +270,8 @@ def register(app, engine):
             raise HTTPException(400, '转写模型尚未安装，请先安装后录音')
         if req.llm_model and req.llm_model not in engine.health()['models']:
             raise HTTPException(400, '所选内容总结模型未就绪，可选择仅保存转写')
+        if engine.LOW_MEMORY and engine.recording_priority.busy():
+            raise HTTPException(409,'试运行期间一次接收一场录音，请先结束当前录音并等待片段保存完成。')
         project = validate_project(req.project)
         rec = engine.new(req.title.strip() or '录音 ' + datetime.now().astimezone().strftime('%m月%d日 %H:%M'), 'meeting')
         rec.update(project=project, status='recording', message='正在录音，文字分段更新…', asr_model=req.model, llm_model=req.llm_model, recording_chunks=[], transcribed_chunks=0, failed_chunks=0, duration=0, summary_status='none', diarization=False)
@@ -367,7 +369,7 @@ def register(app, engine):
             root=engine.folder(jid)
             staging=engine.DATA/'.deleting'/uuid.uuid4().hex
             staging.parent.mkdir(exist_ok=True)
-            live_speakers.service(str(engine.DATA)).clear(jid)
+            engine.speaker_service().clear(jid)
             if not audio_only:
                 root.replace(staging)
                 shutil.rmtree(staging)

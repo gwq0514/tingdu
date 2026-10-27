@@ -1,8 +1,11 @@
 """Run upstream XHS-Downloader in a separate process; cookies only travel over stdin."""
-import asyncio, json, sys
+import asyncio, json, sys, os
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
-sys.path.insert(0,str(ROOT/'vendor/XHS-Downloader'))
+support=Path(os.environ.get('TINGDU_DATA_DIR',ROOT/'data'))/'xhs-support'
+support.mkdir(parents=True,exist_ok=True)
+os.environ.setdefault('TINGDU_XHS_HOME',str(support))
+sys.path.insert(0,str(ROOT/'third_party/XHS-Downloader'))
 from source import XHS
 async def main():
     req=json.loads(sys.stdin.read())

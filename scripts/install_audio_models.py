@@ -1,3 +1,4 @@
+import os
 """Explicit, checksum-verified installation from the model publisher's releases."""
 import hashlib
 import io
@@ -7,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import httpx
 from audio_processing import ASSETS
-root=Path(__file__).resolve().parents[1]/'data'/'models'/'audio';root.mkdir(parents=True,exist_ok=True)
+root=Path(os.environ.get('TINGDU_DATA_DIR',Path(__file__).resolve().parents[1]/'data'))/'models'/'audio';root.mkdir(parents=True,exist_ok=True)
 for name,asset in ASSETS.items():
     path=root/name
     if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==asset['sha256']:

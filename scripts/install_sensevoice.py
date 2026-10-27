@@ -1,3 +1,4 @@
+import os
 """Explicit installation of publisher's SenseVoiceSmall INT8 export.
 Set HTTPS_PROXY if your network needs a proxy. No audio is uploaded.
 """
@@ -10,7 +11,7 @@ FILES={
  'model.int8.onnx':'c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51',
  'tokens.txt':'f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc',
 }
-root=Path(__file__).resolve().parents[1]/'data'/'models'/'sensevoice'
+root=Path(os.environ.get('TINGDU_DATA_DIR',Path(__file__).resolve().parents[1]/'data'))/'models'/'sensevoice'
 
 def install():
     root.mkdir(parents=True,exist_ok=True)

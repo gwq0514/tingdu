@@ -1,0 +1,23 @@
+name: tingdu-2gb-pilot
+services:
+  tingdu-pilot:
+    image: tingdu-pilot:2gb
+    build:
+      context: ../..
+      dockerfile: deploy/2gb/Dockerfile
+    ports:
+      - "127.0.0.1:8768:8768"
+    volumes:
+      - ./data:/data
+    environment:
+      TINGDU_LLM_MODEL: tingdu-qwen:latest
+    mem_limit: 1500m
+    memswap_limit: 3500m
+    cpus: 2
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"

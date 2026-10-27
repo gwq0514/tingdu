@@ -14,3 +14,9 @@ desktop/node_modules/
 *.dmg
 *.spec
 .DS_Store
+
+deploy/2gb/data/
+.env
+*.env
+*.pem
+*.key

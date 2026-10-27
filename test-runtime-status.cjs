@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict');const {message,apply}=require('./static/runtime-status.js');
+assert.match(message({state:'loading'}),/准备模型/);
+assert.match(message({state:'yielding'}),/释放模型资源/);
+assert.match(message({state:'running',active:'asr',operation_label:'语音转写',pending_audio_chunks:3}),/待转写 3 段/);
+assert.match(message({state:'idle',recording_priority:true}),/视频和总结/);
+assert.match(message({state:'error'}),/原声与已有文字保留/);
+const nodes=new Map(['runtimeNotice','runtimeMessage','storageHint'].map(k=>[k,{}]));
+const doc={body:{dataset:{}},getElementById:id=>nodes.get(id),querySelector:()=>null};
+apply({profile:'local'},doc);assert.equal(doc.body.dataset.runtimeProfile,undefined);
+apply({profile:'server-2gb',state:'idle'},doc);assert.equal(nodes.get('runtimeNotice').hidden,false);
+assert.match(nodes.get('runtimeMessage').textContent,/试运行/);
+assert.match(nodes.get('storageHint').textContent,/测试素材/);
+console.log('Runtime UI: real states, backlog, cloud pilot privacy and local-mode isolation OK');

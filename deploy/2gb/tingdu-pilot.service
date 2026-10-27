@@ -1,0 +1,37 @@
+[Unit]
+Description=Tingdu complete-model 2 GiB validation service
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=tingdu-pilot
+Group=tingdu-pilot
+WorkingDirectory=/opt/tingdu-pilot
+EnvironmentFile=/etc/tingdu/pilot.env
+Environment=HOME=/var/lib/tingdu-pilot
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=OMP_NUM_THREADS=1
+Environment=OPENBLAS_NUM_THREADS=1
+ExecStart=/opt/tingdu-pilot/.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8768 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=8
+KillMode=control-group
+TimeoutStopSec=15
+MemoryAccounting=yes
+MemoryHigh=1200M
+MemoryMax=1500M
+MemorySwapMax=2G
+TasksMax=128
+OOMPolicy=continue
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/tingdu-pilot
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
