@@ -76,6 +76,19 @@ class ServerRuntimeIntegrationTests(unittest.TestCase):
         self.assertEqual(op,'llm');self.assertEqual(payload['options']['num_ctx'],16384)
         self.assertEqual(payload['options']['num_predict'],2048);self.assertEqual(payload['keep_alive'],0)
         self.assertEqual(payload['model'],'tingdu-qwen:latest')
+    def test_health_detects_legacy_and_v2_without_starting_model_service(self):
+        import app,sys
+        from pathlib import Path
+        from unittest.mock import Mock,patch
+        for base in ('manifests/registry.ollama.ai/library','manifests-v2/ollama.com/library'):
+            with self.subTest(base=base),tempfile.TemporaryDirectory() as tmp:
+                cache=Path(tmp);blob=cache/'blobs'/'sha256-test';blob.parent.mkdir();blob.write_text('{}')
+                manifest=cache/base/'tingdu-qwen/latest';manifest.parent.mkdir(parents=True);manifest.symlink_to(blob)
+                runtime=Mock();runtime.config={'ollama_models':tmp,'ollama_bin':sys.executable}
+                with patch.object(app,'low_runtime',runtime),patch.dict(os.environ,{'TINGDU_LLM_MODEL':'tingdu-qwen:latest'}),patch.object(app.httpx,'get',side_effect=AssertionError('health must not start or call the model service')):
+                    self.assertEqual(app.health()['models'],['tingdu-qwen:latest'])
+                    blob.unlink()
+                    self.assertEqual(app.health()['models'],[],'dangling cache links are not ready')
     def test_runtime_api_and_origin_allowlist(self):
         import app
         from fastapi.testclient import TestClient

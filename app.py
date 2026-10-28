@@ -338,8 +338,9 @@ def health():
     if low_runtime:
         model=os.environ.get('TINGDU_LLM_MODEL','tingdu-qwen:latest')
         name,_,tag=model.partition(':')
-        manifest=Path(low_runtime.config['ollama_models'])/'manifests/registry.ollama.ai/library'/name/(tag or 'latest')
-        return {'ffmpeg':bool(shutil.which('ffmpeg')),'models':[model] if manifest.is_file() else [],'ollama':Path(low_runtime.config['ollama_bin']).is_file(),'managed':True}
+        cache=Path(low_runtime.config['ollama_models'])
+        manifests=[cache/base/name/(tag or 'latest') for base in ('manifests/registry.ollama.ai/library','manifests-v2/ollama.com/library')]
+        return {'ffmpeg':bool(shutil.which('ffmpeg')),'models':[model] if any(p.is_file() for p in manifests) else [],'ollama':Path(low_runtime.config['ollama_bin']).is_file(),'managed':True}
     result={'ffmpeg':bool(shutil.which('ffmpeg')),'models':[],'ollama':False}
     try:
         resp=httpx.get(OLLAMA_URL+'/api/tags',timeout=2,trust_env=False); resp.raise_for_status()

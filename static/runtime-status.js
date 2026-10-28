@@ -6,12 +6,14 @@
   if(s.state==='switching'||s.state==='loading')return '正在准备模型，录音采集可继续，文字会稍后更新';
   if(s.active)return (s.operation_label||'正在处理')+(pending?' · 待转写 '+pending+' 段':'')+(queued?' · 另有任务排队':'');
   if(s.recording_priority)return pending?'录音优先 · 待转写 '+pending+' 段':'录音优先 · 视频和总结将在空闲后继续';
-  if(queued||s.state==='waiting')return '任务按顺序处理，模型切换时可能短暂等待';
+  if(queued||s.state==='waiting')return '任务按顺序处理，模型切换时可能需要等待';
   return '试运行 · 当前空闲，首次处理需要准备模型';
  }
  function apply(s,doc){
   if(s.profile!=='server-2gb'){const p=doc.querySelector('header .pill');if(p)p.textContent='本地处理 · 隐私优先';return;}
   doc.body.dataset.runtimeProfile=s.profile;
+  for(const id of ['browser','subBrowser']){const select=doc.getElementById(id);if(select){select.value='';select.disabled=true;select.title='云端无法读取你电脑的浏览器登录状态'}}
+  for(const id of ['browserAccessNote','subBrowserAccessNote']){const note=doc.getElementById(id);if(note)note.textContent='云端试运行无法读取你电脑的浏览器登录状态。需要登录的内容，请先在本机获取媒体后上传测试。'}
   doc.getElementById('runtimeNotice').hidden=false;
   doc.getElementById('runtimeMessage').textContent=message(s);
   const pill=doc.querySelector('header .pill');if(pill)pill.textContent='完整模型 · 试运行';

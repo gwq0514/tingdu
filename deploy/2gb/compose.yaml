@@ -13,6 +13,7 @@ services:
       TINGDU_LLM_MODEL: tingdu-qwen:latest
     mem_limit: 1500m
     memswap_limit: 3500m
+    mem_swappiness: 60
     cpus: 2
     pids_limit: 128
     read_only: true

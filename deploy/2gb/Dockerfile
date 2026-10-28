@@ -2,7 +2,8 @@ FROM ollama/ollama:0.40.3 AS model_runtime
 FROM python:3.13-slim-trixie
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates libgomp1 libopenblas0-pthread libvulkan1 && rm -rf /var/lib/apt/lists/*
 COPY --from=model_runtime /bin/ollama /usr/local/bin/ollama
-COPY --from=model_runtime /usr/lib/ollama /usr/lib/ollama
+COPY --from=model_runtime /usr/lib/ollama /usr/local/lib/ollama
+RUN test -x /usr/local/lib/ollama/llama-server
 WORKDIR /app
 COPY requirements.lock.txt /app/
 RUN pip install --no-cache-dir -r requirements.lock.txt

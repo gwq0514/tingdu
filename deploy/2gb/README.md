@@ -1,6 +1,6 @@
 # 完整模型 · 2 核 2 GiB 服务器验证方案
 
-状态：代码、运行状态界面和部署模板已准备；目标实例已读取为 Alibaba Cloud Linux 3、x86_64，约 1871 MiB 可用总内存、检查时约 1438 MiB 可用、未配置 Swap，根盘约 33 GiB 可用。尚未完成目标服务器上的模型容量测试。**这是单人、使用测试素材的试运行，不能直接开放匿名公众使用。** 桌面版默认不启用该模式。
+状态：代码、运行状态界面和部署模板已准备；目标实例已读取为 Alibaba Cloud Linux 3、x86_64，约 1871 MiB 可用总内存、检查时约 1438 MiB 可用、未配置 Swap，根盘约 33 GiB 可用。已开始目标服务器上的模型容量测试，逐项结果见 [RESULTS.md](RESULTS.md)。**这是单人、使用测试素材的试运行，不能直接开放匿名公众使用。** 桌面版默认不启用该模式。
 
 ## 模型与参数保持不变
 
@@ -44,4 +44,29 @@ SenseVoiceSmall INT8、GTCRN、pyannote segmentation + 3D-Speaker 以及当前 Q
 
 目标实例已有 Docker 26.1.3、Compose 2.27.0；系统 Python 为 3.6.8，不满足本项目要求，可优先使用 `Dockerfile` 和 `compose.yaml` 隔离依赖，避免在 Alibaba Cloud Linux 3 上替换系统 Python。先确认官方镜像路径和当前 Docker/Compose 可用，再构建。镜像不包含用户文件；模型与测试数据单独放在 `deploy/2gb/data/`，该目录不能提交 Git。
 
-容器仅映射服务器回环地址 8768，不映射 Ollama 11435，也不挂载 Docker socket。1500 MiB 是整个容器（网页服务、推理进程及模型服务合计）的物理内存上限；3500 MiB 是 RAM+Swap 的合计上限，**不会自动创建 Swap，实例目前没有 Swap**。若原模型无法在这些限制下运行，必须如实报告失败，不能默默改变模型精度或上下文。
+容器仅映射服务器回环地址 8768，不映射 Ollama 11435，也不挂载 Docker socket。1500 MiB 是整个容器（网页服务、推理进程及模型服务合计）的物理内存上限；3500 MiB 是 RAM+Swap 的合计上限，**不会自动创建 Swap，实例初次检查没有 Swap，后续手动兜底测试配置见 RESULTS.md**。若原模型无法在这些限制下运行，必须如实报告失败，不能默默改变模型精度或上下文。
+
+
+## 相同 GGUF 与可重复测试
+
+发布附件提供与桌面包相同的 Q8 GGUF，安装脚本只接受 `third_party/desktop-components.json` 中固定的 SHA256，不以当前其他 GGUF 替换。容器构建完成后，在没有推理任务时执行：
+
+```sh
+docker compose -f deploy/2gb/compose.yaml run --rm --no-deps tingdu-pilot python scripts/install_sensevoice.py
+docker compose -f deploy/2gb/compose.yaml run --rm --no-deps tingdu-pilot python scripts/install_audio_models.py
+docker compose -f deploy/2gb/compose.yaml run --rm --no-deps tingdu-pilot python scripts/install_server_llm.py
+docker compose -f deploy/2gb/compose.yaml up -d
+docker compose -f deploy/2gb/compose.yaml exec tingdu-pilot python -u deploy/2gb/benchmark.py
+docker compose -f deploy/2gb/compose.yaml exec tingdu-pilot python -u deploy/2gb/benchmark_summary.py
+```
+
+第一项容量测试使用合成语音生成 3 分钟导入和约 10 分钟的分段录音，实际耗时至少 10 分钟，不会打开麦克风，会新增带有 Synthetic 标题的测试资源。第二项在测试资源上调用原来的总结请求。重复单一合成声音只能验证容量与流程，不能证明复杂会议识别率或多人发言人区分准确率。内存数值是定时采样的整个容器占用（包括缓存），并非精确的单模型 RSS。
+
+
+## 本次手动交换空间测试
+
+原 16K 请求在无 Swap 时发生推理进程被终止，诊断日志显示 CPU KV buffer 为 1792 MiB，单是缓存已接近实例总内存。本次使用现有磁盘创建 root 所有、权限 600 的 `/var/lib/tingdu-pilot.swap`（2 GiB），手动启用进行后续测试，未修改模型权重或 16K/2048 请求参数。当前未写入 `/etc/fstab`，重启后不会自动启用；部署脚本也不自动修改系统交换空间。
+
+交换空间不是物理内存，不能据此承诺性能。容器物理内存上限仍为 1500 MiB，RAM+Swap 合计上限仍为 3500 MiB。只有在确认没有活跃推理、物理内存足够回收交换页后，才适合关闭该测试交换空间；不能在模型运行中直接移除交换文件。
+
+目标实例使用 cgroup v1，主机和原容器的 swappiness 均为 0。仅创建交换文件不足以让容器在达到自身内存上限时正常换出匿名页；`compose.yaml` 对试验容器设置 `mem_swappiness: 60`，不修改主机全局 swappiness。这一配置需在同样的内核/cgroup 环境验证，不能直接假定所有服务器兼容。
