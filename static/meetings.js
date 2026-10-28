@@ -3,7 +3,7 @@ let deleteTargets=[],deleting=false;
 let recordingProjects=[],projectEditing=false,projectCreateForRecord=false;
 let history=[],current=null,selected='',checked=new Set(),session=null,pollBusy=false,transcriptKey='',summaryKey='',localDirectory=null,folderDB=null,writing=false;
 const savedVersions=new Map(),names={recording:'录音中',running:'整理中',done:'已保存',error:'需检查'};
-async function api(url,options){let r;try{r=await fetch(url,options)}catch{throw Error('无法连接处理服务，请保持本页打开并保留尚未保存的录音备份。')}let d;try{d=await r.json()}catch{throw Error('本机引擎暂时没有响应，请稍后重试。')}if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:'请求未完成，请检查输入后重试。');return d}
+async function api(url,options){let r;try{r=await fetch(url,options)}catch{throw Error('无法连接处理服务，请保持本页打开并保留尚未保存的录音备份。')}let d;try{d=await r.json()}catch{throw Error('处理引擎暂时没有响应，请稍后重试。')}if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:'请求未完成，请检查输入后重试。');return d}
 function cloudRuntime(){return document.body.dataset.runtimeProfile==='server-2gb'||current?.runtime_profile==='server-2gb'}
 function notice(text){if(cloudRuntime())text=text.replaceAll('这台电脑','测试服务工作目录').replaceAll('本机','测试服务').replaceAll('本地模型','完整模型');$('meetingNotice').textContent=text}
 function make(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el}
