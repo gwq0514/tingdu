@@ -1,0 +1,15 @@
+{
+  "desktop": {
+    "version": "1.1.0-mac-preview",
+    "release": "https://github.com/gwq0514/tingdu/releases/tag/v1.1.0-mac-preview",
+    "artifact": "Tingdu-1.1.0-mac-arm64.dmg",
+    "sha256": "c0a734ef920bf91d75561cbc7cc7925c767e4dda1b5c43c63c9c4afb747b4b14",
+    "update_policy": "Explicit desktop release only; never replace with a cloud build."
+  },
+  "cloud": {
+    "version": "1.1.1-cloud.1",
+    "profile": "server-2gb",
+    "entrypoint": "cloud_ui.py",
+    "policy": "Password-protected single-owner pilot. Cloud overlays are never injected into local or desktop pages."
+  }
+}

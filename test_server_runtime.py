@@ -103,3 +103,19 @@ class ServerRuntimeIntegrationTests(unittest.TestCase):
             self.assertEqual(c.get('/api/runtime',headers={'Host':'evil.test'}).status_code,403)
 
 if __name__=='__main__':unittest.main()
+
+class CloudDeletionSchedulingTests(unittest.TestCase):
+    def test_speaker_cleanup_never_waits_for_inference(self):
+        from inference_runtime import SpeakersProxy
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime=Runtime(tmp,RecordingPriority(),idle_seconds=30,target=fake_worker)
+            t=threading.Thread(target=lambda:runtime.run('asr',{'delay':1}));t.start()
+            try:
+                until=time.monotonic()+5
+                while runtime.state!='running' and time.monotonic()<until:time.sleep(.01)
+                start=time.monotonic();SpeakersProxy(runtime).clear('deleted-record')
+                self.assertLess(time.monotonic()-start,.1)
+                self.assertIn('deleted-record',runtime.pending_live_clears)
+                t.join(5);runtime.run('asr',{})
+                self.assertEqual(runtime.pending_live_clears,set())
+            finally:t.join(5);runtime.close()

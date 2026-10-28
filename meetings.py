@@ -9,6 +9,7 @@ import wave
 import shutil
 import live_speakers
 from pathlib import Path
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from fastapi import HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, RedirectResponse
@@ -22,6 +23,14 @@ MAX_SECONDS = 8 * 3600
 def recording_lock(jid):
     with _guard:
         return _locks.setdefault(jid, threading.RLock())
+
+@contextmanager
+def deletion_lock(jid, cloud=False):
+    lock=recording_lock(jid)
+    acquired=lock.acquire(timeout=2) if cloud else lock.acquire()
+    if not acquired:raise HTTPException(409,'录音仍在保存或整理，请等待后台处理完成后再删除；本次未删除任何文件。')
+    try:yield
+    finally:lock.release()
 
 class StartMeeting(BaseModel):
     title: str = Field(default='', max_length=120)
@@ -244,6 +253,9 @@ def register(app, engine):
     @app.get('/meetings')
     def page(embedded: bool = False):
         if not embedded: return RedirectResponse('/?view=recordings', status_code=307)
+        if engine.LOW_MEMORY:
+            from cloud_ui import page as cloud_page
+            return cloud_page(engine.ROOT / 'static' / 'meetings.html')
         return FileResponse(engine.ROOT / 'static' / 'meetings.html')
 
     @app.get('/api/meetings')
@@ -360,7 +372,7 @@ def register(app, engine):
 
     @app.delete('/api/meetings/{jid}')
     def delete_recording(jid:str,audio_only:bool=False):
-        with recording_lock(jid):
+        with deletion_lock(jid,engine.LOW_MEMORY):
             rec=meeting(jid)
             if rec['status'] not in ('done','error') or rec.get('diarization_status') in ('queued','running') or rec.get('summary_status')=='running':
                 raise HTTPException(409,'请先结束录音并等待转写、发言人和总结处理完成后再删除')

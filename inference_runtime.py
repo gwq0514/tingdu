@@ -52,6 +52,7 @@ def worker_main(connection, phase, config):
                     result=''.join(pieces)
                 else:
                     import audio_processing as audio, live_speakers
+                    for jid in p.pop('_clear_live_ids',[]):live_speakers.service(config['data']).clear(jid)
                     models=audio.models_for(config['data'])
                     if op=='asr':
                         from sensevoice_asr import SenseVoiceModel
@@ -83,7 +84,7 @@ class Runtime:
         self.priority=priority;self.idle_seconds=idle_seconds;self.target=target
         self.config={'data':str(Path(data).resolve()),'ollama_bin':ollama_bin,'ollama_models':str(Path(ollama_models or Path(data)/'ollama').resolve()),'ollama_host':ollama_host,'ollama_url':'http://'+ollama_host}
         self.condition=threading.Condition(threading.RLock());self.waiters=[];self.counter=0
-        self.process=None;self.pipe=None;self.phase='';self.active='';self.state='idle';self.changed=time.monotonic();self.closed=False
+        self.process=None;self.pipe=None;self.phase='';self.active='';self.state='idle';self.changed=time.monotonic();self.closed=False;self.pending_live_clears=set()
         threading.Thread(target=self._reap,daemon=True,name='idle-model-reclaimer').start();atexit.register(self.close)
     def _stop(self):
         p=self.process;self.process=None;self.phase=''
@@ -126,7 +127,11 @@ class Runtime:
             interrupted=False
             try:
                 self._start('llm' if op=='llm' else 'audio')
-                self.state='running';self.pipe.send({'op':op,'payload':payload})
+                outgoing=dict(payload)
+                if op!='llm':
+                    with self.condition:
+                        outgoing['_clear_live_ids']=list(self.pending_live_clears);self.pending_live_clears.clear()
+                self.state='running';self.pipe.send({'op':op,'payload':outgoing})
                 while True:
                     # Reclaim the entire owned group before giving the next live chunk memory.
                     if not live and self.priority.busy():raise Interrupted()
@@ -152,6 +157,10 @@ class Runtime:
                     if self.state!='error':self.state='waiting' if interrupted else 'idle'
                     self.condition.notify_all()
             # Restart the interrupted operation from its durable input after recording ends.
+    def defer_clear_live(self,jid):
+        # Deletion is filesystem work, never enqueue a model or wait behind inference.
+        with self.condition:
+            if self.process and self.phase=='audio':self.pending_live_clears.add(jid)
     def status(self):
         with self.condition:
             busy=self.priority.busy()
@@ -184,4 +193,4 @@ class SpeakersProxy:
     def __init__(self,runtime):self.runtime=runtime
     def process(self,jid,samples,segments,offset):return self.runtime.run('live',dict(jid=jid,samples=samples,segments=segments,offset=offset),live=True)
     def clear(self,jid):
-        if self.runtime.phase=='audio':self.runtime.run('clear_live',{'jid':jid},live=True)
+        self.runtime.defer_clear_live(jid)

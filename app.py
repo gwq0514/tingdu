@@ -275,13 +275,20 @@ def new(title,source):
     save(rec); return rec
 
 @app.get('/')
-def index(): return FileResponse(ROOT/'static/index.html')
+def index():
+    if LOW_MEMORY:
+        from cloud_ui import page
+        return page(ROOT/'static/index.html')
+    return FileResponse(ROOT/'static/index.html')
 
 @app.get('/api/jobs')
 def jobs():
     records=[]
     for p in sorted(DATA.glob('*/record.json'),key=lambda p:p.stat().st_mtime,reverse=True):
         r=json.loads(p.read_text()); item={k:r[k] for k in ('id','title','status','message')}; item.update(source=r.get('source',''),created_at=r.get('created_at') or datetime.fromtimestamp(p.stat().st_ctime,timezone.utc).isoformat(),duration=r.get('duration',0),has_summary=bool(r.get('summary')),summary_preview=r.get('summary','')[:220],cover_url=f"/api/jobs/{r['id']}/cover" if (p.parent/'cover.jpg').exists() else '',local_path=str(p.parent.resolve()),creator=r.get('creator'),summary_status=r.get('summary_status'),transcribed_chunks=r.get('transcribed_chunks',0),recorded_chunks=len(r.get('recording_chunks',[])),failed_chunks=r.get('failed_chunks',0),project=r.get('project','')); records.append(item)
+    if LOW_MEMORY:
+        for item in records:
+            if item.get('source')=='meeting':item['diarization_status']=read(item['id']).get('diarization_status')
     return records
 
 @app.get('/api/jobs/{jid}')
