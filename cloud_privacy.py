@@ -147,7 +147,7 @@ def register(app,engine):
     @app.get('/private/migrate')
     def migrate():
         from fastapi.responses import HTMLResponse
-        return HTMLResponse('''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>旧资料迁移</title><h1>把旧资料保存到当前浏览器</h1><p>此页面须使用原 owner 密码。点击后在听读页面保持联网，待每条显示“已保存在此浏览器”后，服务器临时副本会清理。请另外导出重要资料。</p><button id="claim">迁移我的旧资料</button><p id="message"></p><script>document.getElementById('claim').onclick=async()=>{const r=await fetch('/api/cloud/claim-legacy',{method:'POST'});document.getElementById('message').textContent=r.ok?'已认领旧资料，请打开听读等待本机保存。':'迁移未完成';if(r.ok)location.href='/'}</script></html>''')
+        return HTMLResponse('''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>旧资料迁移</title><h1>把旧资料保存到当前浏览器</h1><p>此页面须使用原 owner 密码。点击后在听读页面保持联网，请等待每条资料完成本机保存，并验证能够打开和回听。服务器旧副本会保留，待确认后再清理。请另外导出重要资料。</p><button id="claim">迁移我的旧资料</button><p id="message"></p><script>document.getElementById('claim').onclick=async()=>{const r=await fetch('/api/cloud/claim-legacy',{method:'POST'});document.getElementById('message').textContent=r.ok?'已认领旧资料，请打开听读等待本机保存。':'迁移未完成';if(r.ok)location.href='/'}</script></html>''')
     def sweep():
         while True:
             time.sleep(60)
