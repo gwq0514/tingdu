@@ -18,6 +18,15 @@
   if(terminal(r)){const ack=await native('/api/cloud/jobs/'+id+'/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:r.cloud_revision})});if(ack.ok){record._cloud_cleaned=true;await put('records',{key:id,record});await removeChunks(id);}}
  }catch(e){fail(e);}finally{syncing.delete(id);}}
  async function removeChunks(id){await ready;await new Promise((resolve,reject)=>{const t=db.transaction('chunks','readwrite'),q=t.objectStore('chunks').openCursor();q.onsuccess=()=>{const c=q.result;if(!c)return;if(c.value.id===id)c.delete();c.continue();};t.oncomplete=resolve;t.onerror=()=>reject(t.error);});}
+ async function recoverChunks(record){
+  if(!['recording','running'].includes(record.status)||await get('assets',record.id+':media'))return record;
+  const chunks=(await all('chunks')).filter(x=>x.id===record.id).sort((a,b)=>a.sequence-b.sequence);if(!chunks.length)return record;
+  const parts=await Promise.all(chunks.map(x=>x.blob.arrayBuffer())),header=parts[0].slice(0,44),view=new DataView(header),length=parts.reduce((n,p)=>n+p.byteLength-44,0);if(header.byteLength!==44)return record;
+  view.setUint32(4,36+length,true);view.setUint32(40,length,true);const blob=new Blob([header,...parts.map(p=>p.slice(44))],{type:'audio/wav'});
+  await put('assets',{key:record.id+':media',id:record.id,blob,updated:Date.now()});
+  const r={...record,status:'error',duration:length/32000,media_file:'source.wav',media_url:'/api/jobs/'+record.id+'/media',summary_status:record.summary_status==='running'?'error':record.summary_status,diarization_status:'error',_cloud_saved:true,message:'云端临时处理文件已到期，本机录音片段已恢复为原声，可回听、下载后重新上传。'};
+  await put('records',{key:r.id,record:r});return r;
+ }
  const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
  async function remote(url,options){try{return await native(url,options);}catch{return null;}}
  async function meta(name,remoteResponse){const cached=await get('meta',name);let value=cached?.value||[];if(remoteResponse?.ok){const latest=await remoteResponse.json();value=[...new Map([...value,...latest].map(x=>[typeof x==='string'?x:x.key,x])).values()];await put('meta',{key:name,value});}return value;}
@@ -26,7 +35,7 @@
   const url=typeof input==='string'?input:input.url,u=new URL(url,location.href),method=(options.method||'GET').toUpperCase();if(u.origin!==location.origin||!u.pathname.startsWith('/api/'))return native(input,options);
   await ready;const path=u.pathname;
   if(path==='/api/jobs'||path==='/api/meetings'&&method==='GET'){
-   const response=await remote(url,options),local=await all('records'),merged=new Map(local.map(x=>[x.key,x.record]));if(response?.ok){const rows=await response.json();for(const row of rows){merged.set(row.id,{...(merged.get(row.id)||{}),...row});capture(row.id);}}
+   const response=await remote(url,options),local=await all('records'),merged=new Map(local.map(x=>[x.key,x.record]));if(response?.ok){const rows=await response.json();const ids=new Set(rows.map(x=>x.id));for(const [id,record] of merged)if(!ids.has(id))merged.set(id,await recoverChunks(record));for(const row of rows){merged.set(row.id,{...(merged.get(row.id)||{}),...row});capture(row.id);}}
    const rows=[...merged.values()].filter(r=>path!=='/api/meetings'||r.source==='meeting');return json(await Promise.all(rows.map(materialize)));
   }
   const match=path.match(/^\/api\/(jobs|meetings)\/([a-f0-9]{32})(?:\/(.*))?$/);

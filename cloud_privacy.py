@@ -30,7 +30,7 @@ def clean(value):
     if isinstance(value,dict):return {k:clean(v) for k,v in value.items() if k not in ('cloud_owner','local_path','processing_directory')}
     return value
 
-def terminal(r):return r.get('status') in ('done','error') and r.get('summary_status')!='running' and r.get('diarization_status') not in ('queued','running')
+def terminal(r):return not r.get('cloud_ephemeral') and r.get('status') in ('done','error') and r.get('summary_status')!='running' and r.get('diarization_status') not in ('queued','running')
 
 class Guard(BaseHTTPMiddleware):
     def __init__(self,app,engine):

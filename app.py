@@ -503,6 +503,8 @@ def generate(model,context,prompt,coverage='',format_schema=None):
 def recover_interrupted():
     for p in DATA.glob('*/record.json'):
         r=json.loads(p.read_text())
+        if cloud_mode() and r.get('cloud_ephemeral'):
+            __import__('shutil').rmtree(p.parent);continue
         if r['status'] in ('queued','running'): update(r,'error','上次处理被中断，请重新导入。')
         elif r.get('summary_status') in ('pending','running'):
             r['summary_status']='error';r['message']='上次摘要生成被中断，可在详情页重新生成';save(r)

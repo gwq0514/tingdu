@@ -30,7 +30,9 @@ class CloudPrivacyTests(unittest.TestCase):
         self.assertEqual(self.b.post('/api/cloud/jobs/'+id+'/ack',json={'revision':0}).status_code,404)
         r=self.e.read(id);r['summary_status']='running';self.e.save(r)
         self.assertEqual(self.a.post('/api/cloud/jobs/'+id+'/ack',json={'revision':self.e.read(id).get('cloud_revision')}).status_code,409);self.assertTrue(root.exists())
-        r['summary_status']='done';self.e.save(r);self.assertEqual(self.a.post('/api/cloud/jobs/'+id+'/ack',json={'revision':self.e.read(id).get('cloud_revision')}).status_code,200);self.assertFalse(root.exists());self.assertEqual(self.a.get('/api/jobs').json(),[])
+        r['summary_status']='done';self.e.save(r)
+        self.assertEqual(self.a.post('/api/cloud/jobs/'+id+'/ack',json={'revision':'stale'}).status_code,409);self.assertTrue(root.exists())
+        self.assertEqual(self.a.post('/api/cloud/jobs/'+id+'/ack',json={'revision':self.e.read(id).get('cloud_revision')}).status_code,200);self.assertFalse(root.exists());self.assertEqual(self.a.get('/api/jobs').json(),[])
     def test_project_subscription_and_legacy_isolation(self):
         self.assertEqual(self.a.post('/api/recording-projects',json={'name':'QA category'}).status_code,200);self.assertEqual(self.b.get('/api/recording-projects').json(),[])
         r=self.a.post('/api/cloud/subscriptions/restore',json={'platform':'bilibili','id':'123','name':'QA author','url':'http://127.0.0.1/private'});self.assertEqual(r.status_code,200);self.assertTrue(r.json()['url'].startswith('https://space.bilibili.com/123'))
