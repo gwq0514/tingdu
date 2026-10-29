@@ -1,0 +1,1 @@
+{"name":"tingdu-cloud-source-checks","private":true,"version":"1.2.0-cloud.1","devDependencies":{"fake-indexeddb":"6.2.4"},"scripts":{"test:cloud":"node test-cloud-store.cjs && node test-cloud-client.cjs"}}

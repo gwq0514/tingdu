@@ -16,3 +16,5 @@ preview.png
 **/*.env
 **/*.pem
 **/*.key
+
+node_modules/

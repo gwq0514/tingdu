@@ -7,9 +7,9 @@
     "update_policy": "Explicit desktop release only; never replace with a cloud build."
   },
   "cloud": {
-    "version": "1.1.1-cloud.1",
+    "version": "1.2.0-cloud.1",
     "profile": "server-2gb",
     "entrypoint": "cloud_ui.py",
-    "policy": "Password-protected single-owner pilot. Cloud overlays are never injected into local or desktop pages."
+    "policy": "Cloud-only browser-local history and isolated temporary processing. Public access requires a final proxy switch after validation."
   }
 }

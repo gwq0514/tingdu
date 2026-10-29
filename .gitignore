@@ -20,3 +20,5 @@ deploy/2gb/data/
 *.env
 *.pem
 *.key
+
+node_modules/

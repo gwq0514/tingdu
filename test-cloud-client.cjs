@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('nod
 const nodes=new Map(),get=id=>{if(!nodes.has(id))nodes.set(id,{value:'chrome',textContent:'',closest(){return this},querySelector(){return button}});return nodes.get(id)};
 const button={value:'delete',disabled:false},form=get('deleteForm');let submits=0,deletes=0,state={status:'done',summary_status:'running'},message='';
 form.onsubmit=async()=>{submits++};
-const c=vm.createContext({document:{getElementById:get,querySelectorAll:()=>[]},MutationObserver:class{observe(){}},setTimeout,clearTimeout,AbortController,console,
+const c=vm.createContext({window:{},document:{getElementById:get,querySelectorAll:()=>[]},MutationObserver:class{observe(){}},setTimeout,clearTimeout,AbortController,console,
  renderHistory(){},renderRecord(){},filteredHistory:()=>[],names:{},notice:t=>message=t,
  api:async()=>state,fetch:async()=>{deletes++;return{ok:false,status:409,json:async()=>({detail:'请等待后台处理完成'})}},deleting:false,deleteTargets:[{id:'test',title:'Synthetic fixture'}]});
 vm.runInContext(fs.readFileSync('static/cloud-client.js','utf8'),c);

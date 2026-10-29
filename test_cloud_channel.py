@@ -15,7 +15,7 @@ class CloudChannelTests(unittest.TestCase):
                     self.assertEqual(r.status_code,200)
                     if cloud:
                         self.assertTrue(r.text.startswith('<!doctype html>'))
-                        self.assertIn('/static/cloud-client.js?v=1.1.1-cloud.1',r.text)
+                        self.assertIn('/static/cloud-client.js?v=1.2.0-cloud.1',r.text)
                         self.assertEqual(r.headers['x-tingdu-channel'],'cloud')
                     else:
                         self.assertEqual(r.content,(app.ROOT/'static'/name).read_bytes())

@@ -55,7 +55,7 @@ class RecordingProject(BaseModel):
 
 def register(app, engine):
     def projects():
-        path = engine.DATA / 'recording-projects.json'
+        path = engine.metadata_dir() / 'recording-projects.json'
         return json.loads(path.read_text()) if path.exists() else []
 
     def validate_project(name):
@@ -80,7 +80,7 @@ def register(app, engine):
             if existing: return {'name':existing}
             if len(names) >= 500: raise HTTPException(400, '最多可创建500个项目')
             names.append(name)
-            path = engine.DATA / 'recording-projects.json'
+            path = engine.metadata_dir() / 'recording-projects.json'
             temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
             temp.write_text(json.dumps(names, ensure_ascii=False)); temp.replace(path)
         return {'name':name}
@@ -321,8 +321,8 @@ def register(app, engine):
             if sequence != len(chunks):
                 raise HTTPException(409, '录音片段顺序不连续，请重试上一片段')
             total_frames = sum(c['frames'] for c in chunks)
-            if total_frames + frames > MAX_SECONDS * 16000:
-                raise HTTPException(413, '单次录音最多录制8小时，请结束后开始新会议')
+            if total_frames + frames > (600 if engine.cloud_mode() else MAX_SECONDS) * 16000:
+                raise HTTPException(413, '云端单次录音最多10分钟，请结束后开始新录音' if engine.cloud_mode() else '单次录音最多录制8小时，请结束后开始新会议')
             target = engine.folder(jid) / 'chunks' / f'{sequence:05d}.wav'
             temp = target.with_suffix('.tmp'); temp.write_bytes(raw); temp.replace(target)
             chunks.append({'frames':frames, 'start':total_frames/16000, 'sha256':digest, 'state':'queued'})

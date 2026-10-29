@@ -87,12 +87,34 @@ def folder(jid):
     if not re.fullmatch(r'[a-f0-9]{32}', jid): raise HTTPException(404)
     p = DATA/jid
     if not p.exists(): raise HTTPException(404)
+    if cloud_mode():
+        from cloud_privacy import owner,owned
+        if owner() and (not (p/'record.json').exists() or not owned(sys.modules[__name__],json.loads((p/'record.json').read_text()))):raise HTTPException(404)
     return p
+
+def cloud_mode():
+    from cloud_privacy import enabled
+    return enabled(sys.modules[__name__])
+
+def metadata_dir():
+    from cloud_privacy import metadata
+    return metadata(sys.modules[__name__])
+
+def record_paths():
+    from cloud_privacy import owned
+    paths=[]
+    for p in DATA.glob('*/record.json'):
+        try:
+            rec=json.loads(p.read_text())
+            if owned(sys.modules[__name__],rec) and not (cloud_mode() and rec.get('cloud_ephemeral')):paths.append(p)
+        except FileNotFoundError:pass
+    return paths
 
 def read(jid): return json.loads((folder(jid)/'record.json').read_text())
 def save(rec):
     def write():
         p=DATA/rec['id']/'record.json'
+        if cloud_mode():rec['cloud_revision']=str(__import__('time').time_ns())
         if rec.get('source')=='meeting' and p.exists():
             stored=json.loads(p.read_text())
             if stored.get('metadata_revision',0)>rec.get('metadata_revision',0):
@@ -132,6 +154,10 @@ def transcribe(rec, media, size='sensevoice'):
     wait_for_recording(rec)
     require_asr()
     candidate=Path(media).resolve()
+    if cloud_mode():
+        if candidate.stat().st_size>100*1024**2:raise ValueError('云端视频或音频不能超过100MB，请分段导入')
+        probe=subprocess.run(['ffprobe','-v','error','-show_entries','format=duration','-of','default=noprint_wrappers=1:nokey=1',str(candidate)],capture_output=True,text=True,timeout=20)
+        if probe.returncode or float(probe.stdout.strip() or 0)>1800:raise ValueError('云端视频或音频最多30分钟，请分段导入')
     try: rec['media_file']=str(candidate.relative_to((DATA/rec['id']).resolve()))
     except ValueError: pass
     ensure_cover(rec, candidate)
@@ -201,6 +227,7 @@ def process(jid, url, media, size, browser):
             else:
                 update(rec,'running','正在解析链接并获取音频…')
                 opts={'format':'bestaudio/best','outtmpl':str(DATA/jid/'source.%(ext)s'),'noplaylist':True,'quiet':True,'retries':2,'socket_timeout':30}
+                if cloud_mode():opts['max_filesize']=100*1024**2
                 if browser: opts['cookiesfrombrowser']=(browser,)
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info=ydl.extract_info(url,download=True)
@@ -248,6 +275,7 @@ def ensure_cover(rec, media=None, thumbnail_url=''):
 
 @app.get('/api/storage')
 def storage():
+    if cloud_mode():return {'mode':'browser-local','remote_upload':True,'temporary_hours':24,'public_ready':True}
     return {'mode':'server-validation' if LOW_MEMORY else 'local-engine','processing_directory':str(DATA.resolve()),'remote_upload':False,'public_ready':False}
 
 @app.get('/api/jobs/{jid}/cover')
@@ -270,8 +298,18 @@ class ImportRequest(BaseModel):
     browser: str = ''
 
 def new(title,source):
+    from cloud_privacy import creation_lock
+    with creation_lock if cloud_mode() else nullcontext():return _new(title,source)
+
+def _new(title,source):
+    if cloud_mode():
+        from cloud_privacy import reserve
+        reserve(sys.modules[__name__])
     jid=uuid.uuid4().hex; (DATA/jid).mkdir()
     rec={'id':jid,'title':title,'source':source,'runtime_profile':'server-2gb' if LOW_MEMORY else 'local','status':'queued','message':'等待处理…','text':'','segments':[],'created_at':datetime.now(timezone.utc).isoformat()}
+    if cloud_mode():
+        from cloud_privacy import owner
+        if owner():rec['cloud_owner']=owner()
     save(rec); return rec
 
 @app.get('/')
@@ -284,11 +322,14 @@ def index():
 @app.get('/api/jobs')
 def jobs():
     records=[]
-    for p in sorted(DATA.glob('*/record.json'),key=lambda p:p.stat().st_mtime,reverse=True):
-        r=json.loads(p.read_text()); item={k:r[k] for k in ('id','title','status','message')}; item.update(source=r.get('source',''),created_at=r.get('created_at') or datetime.fromtimestamp(p.stat().st_ctime,timezone.utc).isoformat(),duration=r.get('duration',0),has_summary=bool(r.get('summary')),summary_preview=r.get('summary','')[:220],cover_url=f"/api/jobs/{r['id']}/cover" if (p.parent/'cover.jpg').exists() else '',local_path=str(p.parent.resolve()),creator=r.get('creator'),summary_status=r.get('summary_status'),transcribed_chunks=r.get('transcribed_chunks',0),recorded_chunks=len(r.get('recording_chunks',[])),failed_chunks=r.get('failed_chunks',0),project=r.get('project','')); records.append(item)
-    if LOW_MEMORY:
-        for item in records:
-            if item.get('source')=='meeting':item['diarization_status']=read(item['id']).get('diarization_status')
+    for p in sorted(record_paths(),key=lambda p:p.name if cloud_mode() else p.stat().st_mtime,reverse=True):
+        try:r=json.loads(p.read_text())
+        except FileNotFoundError:continue
+        item={k:r[k] for k in ('id','title','status','message')}; item.update(source=r.get('source',''),created_at=r.get('created_at') or datetime.fromtimestamp(p.stat().st_ctime,timezone.utc).isoformat(),duration=r.get('duration',0),has_summary=bool(r.get('summary')),summary_preview=r.get('summary','')[:220],cover_url=f"/api/jobs/{r['id']}/cover" if (p.parent/'cover.jpg').exists() else '',local_path=str(p.parent.resolve()),creator=r.get('creator'),summary_status=r.get('summary_status'),transcribed_chunks=r.get('transcribed_chunks',0),recorded_chunks=len(r.get('recording_chunks',[])),failed_chunks=r.get('failed_chunks',0),project=r.get('project','')); records.append(item)
+        if LOW_MEMORY and item.get('source')=='meeting':item['diarization_status']=r.get('diarization_status')
+    if cloud_mode():
+        from cloud_privacy import clean
+        return clean(records)
     return records
 
 @app.get('/api/jobs/{jid}')
@@ -296,10 +337,14 @@ def job(jid:str):
     r=read(jid); r['runtime_profile']='server-2gb' if LOW_MEMORY else 'local'; r['local_path']=str(folder(jid).resolve()); r['cover_url']=f'/api/jobs/{jid}/cover' if (folder(jid)/'cover.jpg').exists() else ''; media=find_media(r); r['media_url']=f'/api/jobs/{jid}/media' if media else '';
     if media: r['media_file']=str(media.relative_to(folder(jid).resolve()))
     r['enhanced_url']=f'/api/meetings/{jid}/enhanced' if r.get('source')=='meeting' and (folder(jid)/'enhanced.wav').is_file() else ''
+    if cloud_mode():
+        from cloud_privacy import clean
+        return clean(r)
     return r
 
 @app.post('/api/import')
 def import_content(req:ImportRequest):
+    if cloud_mode() and (req.browser or len(req.text)>200000 or len(req.url)>4000):raise HTTPException(400,'云端不读取浏览器登录状态；正文最多20万字，链接最多4000字符')
     if req.model != 'sensevoice': raise HTTPException(400,'当前统一使用 SenseVoiceSmall，请刷新页面重试')
     if req.browser not in ('','chrome','safari','edge','firefox'): raise HTTPException(400,'浏览器不合法')
     if req.text.strip():
@@ -325,7 +370,10 @@ async def upload(file:UploadFile=File(...),model:str=Form('sensevoice')):
         count=0
         while chunk:=await file.read(1024*1024):
             count+=len(chunk)
-            if count>2*1024**3: raise HTTPException(413,'文件不能超过 2GB')
+            if count>(100*1024**2 if cloud_mode() else 2*1024**3):
+                if cloud_mode():
+                    out.close();__import__('shutil').rmtree(DATA/rec['id'])
+                raise HTTPException(413,'云端文件不能超过100MB' if cloud_mode() else '文件不能超过 2GB')
             out.write(chunk)
     pool.submit(process,rec['id'],'',str(path),model,''); return rec
 
@@ -362,6 +410,7 @@ class ChatRequest(BaseModel):
 
 @app.post('/api/jobs/{jid}/chat')
 def chat(jid:str,req:ChatRequest):
+    if cloud_mode() and (len(req.question)>4000 or req.model not in health()['models']):raise HTTPException(400,'问题最多4000字符，请选择当前已安装模型')
     from meetings import recording_lock
     with recording_lock(jid):
         folder(jid)
@@ -465,3 +514,7 @@ creator_subscriptions.register(app,sys.modules[__name__])
 # Independent meeting page, shared local audio processing and resource storage.
 import meetings as local_meetings
 local_meetings.register(app,sys.modules[__name__])
+
+if LOW_MEMORY:
+    import cloud_privacy
+    cloud_privacy.register(app,sys.modules[__name__])

@@ -150,9 +150,9 @@ def register(app,engine):
     def atomic(path,data):
         path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2));tmp.replace(path)
     def load_subs():
-        p=engine.DATA/'subscriptions.json'
+        p=engine.metadata_dir()/'subscriptions.json'
         return json.loads(p.read_text()) if p.exists() else []
-    def cache_path(key):return engine.DATA/'subscriptions'/ (hashlib.sha256(key.encode()).hexdigest()+'.json')
+    def cache_path(key):return engine.metadata_dir()/'subscriptions'/ (hashlib.sha256(key.encode()).hexdigest()+'.json')
     def sub(key):
         found=next((s for s in load_subs() if s['key']==key),None)
         if not found:raise HTTPException(404,'该作者尚未订阅')
@@ -162,7 +162,7 @@ def register(app,engine):
         state=json.loads(p.read_text()) if p.exists() else {}
         return state if state.get('schema')==1 else {'schema':1,'items':[],'cursor':'','has_more':True,'total':None}
     def discover(jid,browser=''):
-        if browser not in BROWSERS:raise HTTPException(400,'浏览器参数不合法')
+        if browser not in BROWSERS or (engine.cloud_mode() and browser):raise HTTPException(400,'浏览器参数不合法')
         r=engine.read(jid)
         if r.get('creator'):return r['creator']
         if r['status'] in ('queued','running'):raise HTTPException(409,'请等待视频完成解析，再订阅作者')
@@ -196,17 +196,17 @@ def register(app,engine):
             c=discover(req.job_id,req.browser);subs=load_subs()
             existing=next((s for s in subs if s['key']==c['key']),None)
             if existing:return existing
-            c={**c,'subscribed_at':datetime.now(timezone.utc).isoformat()};subs.append(c);atomic(engine.DATA/'subscriptions.json',subs);return c
+            c={**c,'subscribed_at':datetime.now(timezone.utc).isoformat()};subs.append(c);atomic(engine.metadata_dir()/'subscriptions.json',subs);return c
 
     @app.delete('/api/subscriptions/{key}')
     def unsubscribe(key:str):
         with lock:
-            sub(key);atomic(engine.DATA/'subscriptions.json',[s for s in load_subs() if s['key']!=key]);return {'ok':True}
+            sub(key);atomic(engine.metadata_dir()/'subscriptions.json',[s for s in load_subs() if s['key']!=key]);return {'ok':True}
 
     @app.get('/api/subscriptions/{key}/videos')
     def videos(key:str,offset:int=0,browser:str='',refresh:bool=False):
         if offset<0 or offset>100000:raise HTTPException(400,'分页位置不合法')
-        if browser not in BROWSERS:raise HTTPException(400,'浏览器参数不合法')
+        if browser not in BROWSERS or (engine.cloud_mode() and browser):raise HTTPException(400,'浏览器参数不合法')
         with lock:
             creator=sub(key);state=cache(key)
             if refresh:state={'schema':1,'items':[],'cursor':'','has_more':True,'total':None,'retry_after':state.get('retry_after',0)};offset=0
@@ -229,7 +229,7 @@ def register(app,engine):
                 state.update(cursor=page['cursor'],has_more=page['has_more'],total=page['total'])
                 if page['has_more'] and page['cursor']==previous:raise HTTPException(502,'平台没有返回新的分页位置，请刷新作者列表后重试')
                 atomic(cache_path(key),state)
-            existing={record_identity(json.loads(p.read_text())):json.loads(p.read_text()) for p in engine.DATA.glob('*/record.json')}
+            existing={record_identity(json.loads(p.read_text())):json.loads(p.read_text()) for p in engine.record_paths()}
             batch=[]
             for v in state['items'][offset:offset+10]:
                 row=dict(v);job=existing.get(canonical(v['url']));row.update(imported=bool(job and job['status']!='error'),job_id=job['id'] if job else None,job_status=job['status'] if job else None);batch.append(row)
@@ -248,7 +248,7 @@ def register(app,engine):
 
     @app.post('/api/subscriptions/{key}/import')
     def batch_import(key:str,req:BatchRequest):
-        if req.model != 'sensevoice' or req.browser not in BROWSERS:raise HTTPException(400,'模型或浏览器参数不合法')
+        if req.model != 'sensevoice' or req.browser not in BROWSERS or (engine.cloud_mode() and req.browser):raise HTTPException(400,'模型或浏览器参数不合法')
         engine.require_asr()
         if not req.llm_model.strip():raise HTTPException(400,'请选择用于生成摘要的本地模型')
         # Check locally before enqueueing jobs, instead of discovering hours later that a model is missing.
@@ -256,8 +256,9 @@ def register(app,engine):
         if req.llm_model not in health['models']:raise HTTPException(400,'所选本地摘要模型未启动或未安装，请先启动模型服务')
         with lock:
             creator=sub(key);items={v['id']:v for v in cache(key)['items']};ids=list(dict.fromkeys(req.video_ids))
+            if engine.cloud_mode() and len(ids)>2:raise HTTPException(429,'云端每批最多导入2个视频，请等待处理完成后继续')
             if any(i not in items for i in ids):raise HTTPException(400,'选择中包含不属于该作者已加载列表的视频，请刷新后重试')
-            existing={record_identity(r):r for p in engine.DATA.glob('*/record.json') if (r:=json.loads(p.read_text()))['status']!='error'}
+            existing={record_identity(r):r for p in engine.record_paths() if (r:=json.loads(p.read_text()))['status']!='error'}
             added=[];skipped=[]
             for vid in ids:
                 v=items[vid];identity=canonical(v['url'])
